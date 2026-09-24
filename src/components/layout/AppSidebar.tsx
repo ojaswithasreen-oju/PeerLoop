@@ -14,6 +14,7 @@ import {
   ChevronRight,
   User,
   Sparkles,
+  Compass,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -47,6 +48,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     { id: 'progress', label: 'My Progress', icon: TrendingUp },
     { id: 'saved', label: 'Saved', icon: Bookmark },
     { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadCount },
+    { id: 'landing', label: 'Landing Page', icon: Compass },
   ];
 
   return (

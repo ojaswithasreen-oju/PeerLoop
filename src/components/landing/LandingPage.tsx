@@ -32,6 +32,7 @@ interface LandingPageProps {
   onSignIn: () => void;
   onTestDrive: (userId: string) => void;
   onNavigateToTab?: (tab: string) => void;
+  onOpenApp?: () => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
@@ -39,6 +40,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onSignIn,
   onTestDrive,
   onNavigateToTab,
+  onOpenApp,
 }) => {
   // Mobile navigation state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -117,7 +119,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </nav>
 
           {/* Zone 3: 1-2 primary actions */}
-          <div className="hidden sm:flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2.5">
+            {onOpenApp && (
+              <button
+                onClick={onOpenApp}
+                className="px-3.5 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/80 rounded-lg hover:bg-indigo-100 hover:text-indigo-800 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Layers className="w-4 h-4 text-indigo-600" />
+                <span>Go to Workspace</span>
+              </button>
+            )}
             <button
               onClick={onSignIn}
               className="px-3.5 py-2 text-sm font-medium text-stone-700 hover:text-stone-950 transition-colors cursor-pointer"
@@ -134,6 +145,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           {/* Mobile hamburger button */}
           <div className="flex sm:hidden items-center gap-2">
+            {onOpenApp && (
+              <button
+                onClick={onOpenApp}
+                className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"
+              >
+                App
+              </button>
+            )}
             <button
               onClick={onGetStarted}
               className="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
@@ -178,6 +197,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Community
             </button>
             <div className="pt-2 border-t border-stone-200 flex flex-col gap-2">
+              {onOpenApp && (
+                <button
+                  onClick={onOpenApp}
+                  className="w-full py-2.5 text-center text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center justify-center gap-1.5"
+                >
+                  <Layers className="w-4 h-4 text-indigo-600" />
+                  <span>Go to Workspace</span>
+                </button>
+              )}
               <button
                 onClick={onSignIn}
                 className="w-full py-2.5 text-center text-sm font-medium text-stone-700 bg-white border border-stone-200 rounded-lg hover:bg-stone-50"

@@ -29,13 +29,26 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Validation for private user account
+    // Validation for private user account and onboarding data
     function isValidUser(data) {
       return data.id is string &&
              data.id == request.auth.uid &&
              data.email is string &&
              data.email.size() > 0 &&
              data.email.size() <= 120 &&
+             (!('profileCompleted' in data) || data.profileCompleted is bool) &&
+             (!('name' in data) || (data.name is string && data.name.size() <= 100)) &&
+             (!('fullName' in data) || (data.fullName is string && data.fullName.size() <= 100)) &&
+             (!('college' in data) || (data.college is string && data.college.size() <= 120)) &&
+             (!('course' in data) || (data.course is string && data.course.size() <= 100)) &&
+             (!('year' in data) || (data.year is string && data.year.size() <= 60)) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 100)) &&
+             (!('learningMode' in data) || (data.learningMode is string && data.learningMode.size() <= 50)) &&
+             (!('mode' in data) || data.mode in ['learner', 'mentor', 'both']) &&
+             (!('skillsToLearn' in data) || data.skillsToLearn is list) &&
+             (!('skillsToTeach' in data) || data.skillsToTeach is list) &&
+             (!('careerGoals' in data) || (data.careerGoals is string && data.careerGoals.size() <= 1000)) &&
+             (!('preferredLanguage' in data) || (data.preferredLanguage is string && data.preferredLanguage.size() <= 50)) &&
              (!('emailVerified' in data) || data.emailVerified is bool) &&
              (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50)) &&
              (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
@@ -53,8 +66,11 @@ service cloud.firestore {
              data.fullName.size() <= 100 &&
              (!('college' in data) || (data.college is string && data.college.size() <= 120)) &&
              (!('course' in data) || (data.course is string && data.course.size() <= 100)) &&
-             (!('year' in data) || (data.year is string && data.year.size() <= 40)) &&
+             (!('year' in data) || (data.year is string && data.year.size() <= 60)) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 100)) &&
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000)) &&
+             (!('profileCompleted' in data) || data.profileCompleted is bool) &&
+             (!('isOnboarded' in data) || data.isOnboarded is bool) &&
              (!('mode' in data) || data.mode in ['learner', 'mentor', 'both']) &&
              (!('activeMode' in data) || data.activeMode in ['learner', 'mentor']);
     }
@@ -64,7 +80,7 @@ service cloud.firestore {
       allow get: if true;
     }
 
-    // Private user accounts (PII & sensitive authentication data)
+    // Private user accounts (PII, onboarding & sensitive authentication data)
     match /users/{userId} {
       allow get: if isValidId(userId) && isOwner(userId);
       allow list: if false;

@@ -14,6 +14,7 @@ export const DEMO_USERS: UserProfile[] = [
     mode: 'both',
     activeMode: 'learner',
     isOnboarded: true,
+    profileCompleted: true,
     preferredLanguage: 'English',
     learningFormat: 'Visual & Hands-on',
     skillsToLearn: [
@@ -127,6 +128,7 @@ export const DEMO_USERS: UserProfile[] = [
     mode: 'both',
     activeMode: 'mentor',
     isOnboarded: true,
+    profileCompleted: true,
     preferredLanguage: 'English',
     learningFormat: 'Code Walkthrough',
     skillsToLearn: [
@@ -216,6 +218,7 @@ export const DEMO_USERS: UserProfile[] = [
     mode: 'both',
     activeMode: 'mentor',
     isOnboarded: true,
+    profileCompleted: true,
     preferredLanguage: 'English',
     learningFormat: 'Problem Solving',
     skillsToLearn: [],

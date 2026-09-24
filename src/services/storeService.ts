@@ -16,6 +16,9 @@ import {
   CommunityPost,
   ResourceItem,
   NotificationItem,
+  UserAccount,
+  OnboardingData,
+  UserSkill,
 } from '../types';
 import {
   DEMO_USERS,
@@ -147,7 +150,33 @@ export class StoreService {
     }
   }
 
-  public async saveUserAccount(user: { id: string; email: string; emailVerified?: boolean; createdAt: string; updatedAt?: string }): Promise<void> {
+  public async getUserAccount(userId: string): Promise<UserAccount | null> {
+    const path = `users/${userId}`;
+    try {
+      const docRef = doc(db, 'users', userId);
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists()) {
+        const account = snapshot.data() as UserAccount;
+        const localAccounts = getLocal<Record<string, UserAccount>>('user_accounts', {});
+        localAccounts[userId] = account;
+        setLocal('user_accounts', localAccounts);
+        return account;
+      }
+    } catch (e: unknown) {
+      if (auth.currentUser && (e as { code?: string })?.code === 'permission-denied') {
+        handleFirestoreError(e, OperationType.GET, path);
+      }
+      console.warn('Firestore getUserAccount offline or fallback:', e);
+    }
+    const localAccounts = getLocal<Record<string, UserAccount>>('user_accounts', {});
+    return localAccounts[userId] || null;
+  }
+
+  public async saveUserAccount(user: Partial<UserAccount> & { id: string }): Promise<void> {
+    const localAccounts = getLocal<Record<string, UserAccount>>('user_accounts', {});
+    localAccounts[user.id] = { ...localAccounts[user.id], ...user } as UserAccount;
+    setLocal('user_accounts', localAccounts);
+
     if (auth.currentUser && auth.currentUser.uid === user.id) {
       const path = `users/${user.id}`;
       try {
@@ -156,6 +185,104 @@ export class StoreService {
         handleFirestoreError(e, OperationType.WRITE, path);
       }
     }
+  }
+
+  public async saveOnboardingData(userId: string, data: OnboardingData): Promise<void> {
+    const roleMode = data.learningMode === 'Learn' ? 'learner' : data.learningMode === 'Teach' ? 'mentor' : 'both';
+
+    // 1. Save all onboarding information directly to users/{uid} with profileCompleted: true
+    const userAccountUpdate: Partial<UserAccount> & { id: string } = {
+      id: userId,
+      email: auth.currentUser?.email || '',
+      name: data.name,
+      fullName: data.name,
+      college: data.college,
+      course: data.course,
+      year: data.year,
+      location: data.location,
+      learningMode: data.learningMode,
+      skillsToLearn: data.skillsToLearn,
+      skillsToTeach: data.skillsToTeach,
+      careerGoals: data.careerGoals,
+      preferredLanguage: data.preferredLanguage,
+      profileCompleted: true,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.saveUserAccount(userAccountUpdate);
+
+    // 2. Also sync to profiles/{userId} for peer learning directory
+    const existingProfile = await this.getProfile(userId);
+    const formattedLearnSkills: UserSkill[] = data.skillsToLearn.map((s, idx) => ({
+      id: `learn-${idx}-${Date.now()}`,
+      name: s.name,
+      level: s.level,
+      category: 'Programming',
+      verified: false,
+    }));
+    const formattedTeachSkills: UserSkill[] = data.skillsToTeach.map((s, idx) => ({
+      id: `teach-${idx}-${Date.now()}`,
+      name: s.name,
+      level: s.level,
+      category: 'Programming',
+      verified: true,
+      verifiedMethod: 'Skill Assessment Passed',
+    }));
+
+    const updatedProfile: UserProfile = {
+      id: userId,
+      email: existingProfile?.email || auth.currentUser?.email || '',
+      fullName: data.name,
+      name: data.name,
+      avatarUrl:
+        existingProfile?.avatarUrl ||
+        auth.currentUser?.photoURL ||
+        `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80`,
+      college: data.college,
+      course: data.course,
+      year: data.year,
+      location: data.location,
+      bio:
+        existingProfile?.bio ||
+        `${data.learningMode} focused student at ${data.college}. Career goal: ${data.careerGoals}`,
+      mode: roleMode,
+      learningMode: data.learningMode,
+      activeMode: roleMode === 'mentor' ? 'mentor' : 'learner',
+      isOnboarded: true,
+      profileCompleted: true,
+      preferredLanguage: data.preferredLanguage,
+      learningFormat: existingProfile?.learningFormat || 'Visual & Hands-on',
+      skillsToLearn: formattedLearnSkills,
+      skillsToTeach: formattedTeachSkills,
+      learningGoals: existingProfile?.learningGoals || [
+        {
+          id: `goal-${Date.now()}`,
+          skill: data.skillsToLearn[0]?.name || 'Computer Science',
+          targetTopic: data.careerGoals || 'Core Concepts & Problem Solving',
+          progressPercent: 20,
+          status: 'in_progress',
+        },
+      ],
+      availability: existingProfile?.availability || {
+        status: 'available',
+        days: ['Mon', 'Wed', 'Fri', 'Sat'],
+        timeSlots: ['4:00 PM - 7:00 PM', '8:00 PM - 10:00 PM'],
+        preferredDurationMinutes: 20,
+      },
+      reputation: existingProfile?.reputation || {
+        score: 75,
+        learnersHelped: 0,
+        sessionsCount: 0,
+        averageRating: 5.0,
+        clarityScore: 85,
+        accuracyScore: 85,
+        consistencyScore: 80,
+        badges: [],
+      },
+      createdAt: existingProfile?.createdAt || new Date().toISOString(),
+    };
+
+    await this.saveProfile(updatedProfile);
   }
 
   public async getAllMentors(): Promise<UserProfile[]> {

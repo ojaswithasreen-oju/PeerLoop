@@ -10,7 +10,7 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile, UserRole, OnboardingData } from '../types';
 import { store } from '../services/storeService';
 import { DEMO_USERS } from '../services/seedData';
 
@@ -19,6 +19,8 @@ interface AuthContextType {
   currentUser: UserProfile | null;
   isLoading: boolean;
   activeMode: 'learner' | 'mentor';
+  logoutMessage: string | null;
+  clearLogoutMessage: () => void;
   switchActiveMode: (mode: 'learner' | 'mentor') => void;
   signIn: (email: string, pass: string) => Promise<void>;
   signUp: (email: string, pass: string, fullName: string) => Promise<void>;
@@ -27,7 +29,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   updateProfile: (updated: Partial<UserProfile>) => Promise<void>;
   switchDemoUser: (userId: string) => void;
-  completeOnboarding: (data: Partial<UserProfile>) => Promise<void>;
+  completeOnboarding: (data: OnboardingData | Partial<UserProfile>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,51 +37,79 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    // Default to the first demo user (Ojaswitha) for initial interactive state
-    const savedId = localStorage.getItem('peerloop_active_user_id') || DEMO_USERS[0].id;
-    return DEMO_USERS.find((u) => u.id === savedId) || DEMO_USERS[0];
+    // Only restore if user explicitly has an active session
+    const savedId = localStorage.getItem('peerloop_active_user_id');
+    if (!savedId) return null;
+    return DEMO_USERS.find((u) => u.id === savedId) || null;
   });
   const [activeMode, setActiveMode] = useState<'learner' | 'mentor'>(() => {
     return (localStorage.getItem('peerloop_active_mode') as 'learner' | 'mentor') || 'learner';
   });
+  const [logoutMessage, setLogoutMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const clearLogoutMessage = () => setLogoutMessage(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
-        // Save private account record
-        await store.saveUserAccount({
-          id: user.uid,
-          email: user.email || '',
-          emailVerified: user.emailVerified,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
+        localStorage.setItem('peerloop_active_user_id', user.uid);
+        // Load private user account from users/{uid}
+        const userAccount = await store.getUserAccount(user.uid);
+        if (!userAccount) {
+          await store.saveUserAccount({
+            id: user.uid,
+            email: user.email || '',
+            name: user.displayName || '',
+            fullName: user.displayName || '',
+            profileCompleted: false,
+            emailVerified: user.emailVerified,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
 
         // Load user profile from store
         const profile = await store.getProfile(user.uid);
+        const isProfileCompleted = userAccount?.profileCompleted === true || profile?.profileCompleted === true;
+
         if (profile) {
-          setCurrentUser(profile);
+          const merged: UserProfile = {
+            ...profile,
+            fullName: userAccount?.name || profile.fullName,
+            name: userAccount?.name || profile.name || profile.fullName,
+            college: userAccount?.college || profile.college,
+            course: userAccount?.course || profile.course,
+            year: userAccount?.year || profile.year,
+            location: userAccount?.location || profile.location,
+            careerGoals: userAccount?.careerGoals || profile.careerGoals,
+            preferredLanguage: userAccount?.preferredLanguage || profile.preferredLanguage,
+            profileCompleted: isProfileCompleted,
+            isOnboarded: isProfileCompleted,
+          };
+          setCurrentUser(merged);
           setActiveMode(profile.activeMode || 'learner');
         } else {
-          // New auth user, construct base profile
+          // New auth user, construct base profile with profileCompleted: false
           const newProfile: UserProfile = {
             id: user.uid,
             email: user.email || '',
-            fullName: user.displayName || user.email?.split('@')[0] || 'Peer Learner',
+            fullName: userAccount?.name || user.displayName || user.email?.split('@')[0] || 'Peer Learner',
+            name: userAccount?.name || user.displayName || user.email?.split('@')[0] || 'Peer Learner',
             avatarUrl:
               user.photoURL ||
               `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80`,
-            college: 'University Campus',
-            course: 'Computer Science',
-            year: '1st Year',
-            location: 'Campus',
-            bio: 'Learning new skills and collaborating with peers on PeerLoop.',
+            college: userAccount?.college || '',
+            course: userAccount?.course || '',
+            year: userAccount?.year || '1st Year (Freshman)',
+            location: userAccount?.location || '',
+            bio: '',
             mode: 'both',
             activeMode: 'learner',
-            isOnboarded: false,
-            preferredLanguage: 'English',
+            isOnboarded: isProfileCompleted,
+            profileCompleted: isProfileCompleted,
+            preferredLanguage: userAccount?.preferredLanguage || 'English',
             learningFormat: 'Visual & Hands-on',
             skillsToLearn: [],
             skillsToTeach: [],
@@ -105,6 +135,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await store.saveProfile(newProfile);
           setCurrentUser(newProfile);
         }
+      } else {
+        const savedId = localStorage.getItem('peerloop_active_user_id');
+        if (savedId) {
+          const found = DEMO_USERS.find((u) => u.id === savedId);
+          if (found) {
+            setCurrentUser({
+              ...found,
+              profileCompleted: true,
+              isOnboarded: true,
+            });
+          } else {
+            setCurrentUser(null);
+          }
+        } else {
+          setCurrentUser(null);
+        }
       }
       setIsLoading(false);
     });
@@ -129,13 +175,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setActiveMode(found.activeMode || 'learner');
       localStorage.setItem('peerloop_active_user_id', found.id);
       localStorage.setItem('peerloop_active_mode', found.activeMode || 'learner');
+      setLogoutMessage(null);
     }
   };
 
   const signIn = async (email: string, pass: string) => {
     setIsLoading(true);
+    setLogoutMessage(null);
     try {
       const cred = await signInWithEmailAndPassword(auth, email, pass);
+      localStorage.setItem('peerloop_active_user_id', cred.user.uid);
       const profile = await store.getProfile(cred.user.uid);
       if (profile) setCurrentUser(profile);
     } catch (err: unknown) {
@@ -154,8 +203,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, pass: string, fullName: string) => {
     setIsLoading(true);
+    setLogoutMessage(null);
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      localStorage.setItem('peerloop_active_user_id', cred.user.uid);
       const newProfile: UserProfile = {
         id: cred.user.uid,
         email,
@@ -169,6 +220,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         mode: 'both',
         activeMode: 'learner',
         isOnboarded: false,
+        profileCompleted: false,
         preferredLanguage: 'English',
         learningFormat: 'Visual & Hands-on',
         skillsToLearn: [],
@@ -192,6 +244,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         createdAt: new Date().toISOString(),
       };
+      // Save initial private user record to users/{uid} with profileCompleted: false
+      await store.saveUserAccount({
+        id: cred.user.uid,
+        email,
+        name: fullName,
+        fullName,
+        profileCompleted: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
       await store.saveProfile(newProfile);
       setCurrentUser(newProfile);
     } finally {
@@ -201,41 +263,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = async () => {
     setIsLoading(true);
+    setLogoutMessage(null);
     try {
       const provider = new GoogleAuthProvider();
       const cred = await signInWithPopup(auth, provider);
       const user = cred.user;
+      localStorage.setItem('peerloop_active_user_id', user.uid);
 
-      // Save private account record
+      // Check existing user account
+      const userAccount = await store.getUserAccount(user.uid);
+      const profile = await store.getProfile(user.uid);
+      const isCompleted = userAccount?.profileCompleted === true || profile?.profileCompleted === true;
+
+      // Save or update private account record
       await store.saveUserAccount({
         id: user.uid,
         email: user.email || '',
+        name: userAccount?.name || user.displayName || '',
+        fullName: userAccount?.fullName || user.displayName || '',
+        profileCompleted: isCompleted,
         emailVerified: user.emailVerified,
-        createdAt: new Date().toISOString(),
+        createdAt: userAccount?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
 
-      // Load profile or create initial profile
-      const profile = await store.getProfile(user.uid);
       if (profile) {
-        setCurrentUser(profile);
+        const merged: UserProfile = {
+          ...profile,
+          profileCompleted: isCompleted,
+          isOnboarded: isCompleted,
+        };
+        setCurrentUser(merged);
         setActiveMode(profile.activeMode || 'learner');
       } else {
         const newProfile: UserProfile = {
           id: user.uid,
           email: user.email || '',
           fullName: user.displayName || user.email?.split('@')[0] || 'University Peer',
+          name: user.displayName || user.email?.split('@')[0] || 'University Peer',
           avatarUrl:
             user.photoURL ||
             'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-          college: 'University Campus',
-          course: 'Computer Science',
-          year: '1st Year',
-          location: 'Campus',
+          college: '',
+          course: '',
+          year: '1st Year (Freshman)',
+          location: '',
           bio: 'Learning new skills and collaborating with peers on PeerLoop.',
           mode: 'both',
           activeMode: 'learner',
           isOnboarded: false,
+          profileCompleted: false,
           preferredLanguage: 'English',
           learningFormat: 'Visual & Hands-on',
           skillsToLearn: [],
@@ -248,7 +325,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             preferredDurationMinutes: 20,
           },
           reputation: {
-            score: 80,
+            score: 75,
             learnersHelped: 0,
             sessionsCount: 0,
             averageRating: 5.0,
@@ -275,9 +352,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Signout note:', e);
     }
     setFirebaseUser(null);
-    // Keep a clean guest demo or reset
     setCurrentUser(null);
     localStorage.removeItem('peerloop_active_user_id');
+    localStorage.removeItem('peerloop_active_mode');
+    sessionStorage.clear();
+    setLogoutMessage('You’ve been logged out successfully.');
   };
 
   const resetPassword = async (email: string) => {
@@ -291,17 +370,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await store.saveProfile(merged);
   };
 
-  const completeOnboarding = async (data: Partial<UserProfile>) => {
+  const completeOnboarding = async (data: OnboardingData | Partial<UserProfile>) => {
     if (!currentUser) return;
-    const merged: UserProfile = {
-      ...currentUser,
-      ...data,
-      isOnboarded: true,
-      activeMode: data.mode === 'mentor' ? 'mentor' : 'learner',
-    };
-    setCurrentUser(merged);
-    setActiveMode(merged.activeMode);
-    await store.saveProfile(merged);
+
+    if ('learningMode' in data && 'skillsToLearn' in data) {
+      const onboardingPayload = data as OnboardingData;
+      // 1. Save all onboarding information to users/{uid} and set profileCompleted: true
+      await store.saveOnboardingData(currentUser.id, onboardingPayload);
+
+      const roleMode =
+        onboardingPayload.learningMode === 'Learn'
+          ? 'learner'
+          : onboardingPayload.learningMode === 'Teach'
+          ? 'mentor'
+          : 'both';
+
+      const merged: UserProfile = {
+        ...currentUser,
+        fullName: onboardingPayload.name,
+        name: onboardingPayload.name,
+        college: onboardingPayload.college,
+        course: onboardingPayload.course,
+        year: onboardingPayload.year,
+        location: onboardingPayload.location,
+        mode: roleMode,
+        learningMode: onboardingPayload.learningMode,
+        activeMode: roleMode === 'mentor' ? 'mentor' : 'learner',
+        careerGoals: onboardingPayload.careerGoals,
+        preferredLanguage: onboardingPayload.preferredLanguage,
+        profileCompleted: true,
+        isOnboarded: true,
+      };
+
+      setCurrentUser(merged);
+      setActiveMode(merged.activeMode);
+      localStorage.setItem('peerloop_active_mode', merged.activeMode);
+    } else {
+      const merged: UserProfile = {
+        ...currentUser,
+        ...data,
+        isOnboarded: true,
+        profileCompleted: true,
+        activeMode: data.mode === 'mentor' ? 'mentor' : 'learner',
+      };
+      setCurrentUser(merged);
+      setActiveMode(merged.activeMode);
+      await store.saveProfile(merged);
+    }
   };
 
   return (
@@ -311,6 +426,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         isLoading,
         activeMode,
+        logoutMessage,
+        clearLogoutMessage,
         switchActiveMode,
         signIn,
         signUp,

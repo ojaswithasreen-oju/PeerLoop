@@ -2,7 +2,7 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "Private account credential and verification data.",
+      "description": "Private account credential, onboarding, and verification data.",
       "type": "object",
       "properties": {
         "id": {
@@ -13,6 +13,50 @@
           "type": "string",
           "format": "email",
           "description": "Account email address."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Full name collected during onboarding."
+        },
+        "college": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "College or university."
+        },
+        "course": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Degree or course of study."
+        },
+        "year": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "Academic year."
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Campus location or city."
+        },
+        "learningMode": {
+          "type": "string",
+          "enum": ["Learn", "Teach", "Learn + Teach"],
+          "description": "Learning mode selected during onboarding."
+        },
+        "careerGoals": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Career or study goals."
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Preferred language for sessions."
+        },
+        "profileCompleted": {
+          "type": "boolean",
+          "description": "Whether onboarding flow was successfully completed."
         },
         "emailVerified": {
           "type": "boolean",
@@ -67,7 +111,7 @@
         },
         "year": {
           "type": "string",
-          "maxLength": 40,
+          "maxLength": 60,
           "description": "Academic year or graduation class."
         },
         "location": {
@@ -94,6 +138,10 @@
           "type": "boolean",
           "description": "Whether onboarding has been completed."
         },
+        "profileCompleted": {
+          "type": "boolean",
+          "description": "Whether profile onboarding is completed."
+        },
         "preferredLanguage": {
           "type": "string",
           "maxLength": 50,
@@ -116,7 +164,7 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "Private user account records restricted to the account owner."
+      "description": "Private user account records and onboarding state restricted to the account owner."
     },
     "/profiles/{userId}": {
       "schema": "UserProfile",

@@ -35,6 +35,7 @@ export interface UserProfile {
   id: string;
   email: string;
   fullName: string;
+  name?: string;
   avatarUrl: string;
   college: string;
   course: string;
@@ -42,8 +43,11 @@ export interface UserProfile {
   location: string;
   bio: string;
   mode: UserRole; // 'learner' | 'mentor' | 'both'
+  learningMode?: 'Learn' | 'Teach' | 'Learn + Teach';
   activeMode: 'learner' | 'mentor';
   isOnboarded: boolean;
+  profileCompleted?: boolean;
+  careerGoals?: string;
   preferredLanguage: string;
   learningFormat: 'Visual & Hands-on' | 'Code Walkthrough' | 'Conceptual' | 'Problem Solving';
   skillsToLearn: UserSkill[];
@@ -66,6 +70,39 @@ export interface UserProfile {
     badges: MentorBadge[];
   };
   createdAt: string;
+}
+
+export interface OnboardingData {
+  name: string;
+  college: string;
+  course: string;
+  year: string;
+  location: string;
+  learningMode: 'Learn' | 'Teach' | 'Learn + Teach';
+  skillsToLearn: { name: string; level: SkillLevel }[];
+  skillsToTeach: { name: string; level: SkillLevel }[];
+  careerGoals: string;
+  preferredLanguage: string;
+}
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  name?: string;
+  fullName?: string;
+  college?: string;
+  course?: string;
+  year?: string;
+  location?: string;
+  learningMode?: 'Learn' | 'Teach' | 'Learn + Teach';
+  skillsToLearn?: { name: string; level: SkillLevel }[];
+  skillsToTeach?: { name: string; level: SkillLevel }[];
+  careerGoals?: string;
+  preferredLanguage?: string;
+  profileCompleted?: boolean;
+  emailVerified?: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface LearningRequest {

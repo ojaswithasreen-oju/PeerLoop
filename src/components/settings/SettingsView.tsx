@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Settings, Shield, Bell, Moon, Laptop, User, Volume2 } from 'lucide-react';
+import { Settings, Shield, Bell, Moon, Laptop, User, Volume2, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const SettingsView: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, signOut } = useAuth();
   const [notifyOnMatches, setNotifyOnMatches] = useState(true);
   const [audioPings, setAudioPings] = useState(true);
 
@@ -66,6 +66,28 @@ export const SettingsView: React.FC = () => {
               />
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Account & Session Security Section */}
+      <div className="p-6 rounded-3xl bg-[#151E33] border border-[#1E2A47] space-y-4 shadow-lg">
+        <h3 className="text-sm font-bold text-[#F8FAFC] flex items-center gap-2">
+          <Shield className="w-4 h-4 text-indigo-400" />
+          <span>Account &amp; Session</span>
+        </h3>
+        <p className="text-xs text-[#94A3B8]">
+          You are currently signed in as{' '}
+          <span className="font-semibold text-white">{currentUser?.fullName || 'Student'}</span>{' '}
+          ({currentUser?.email || 'Active Account'}).
+        </p>
+        <div className="pt-2">
+          <button
+            onClick={() => signOut()}
+            className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Log Out of PeerLoop</span>
+          </button>
         </div>
       </div>
     </div>
