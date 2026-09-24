@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Private account credential and verification data.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Account email address."
+        },
+        "emailVerified": {
+          "type": "boolean",
+          "description": "Whether the user's email has been verified."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user account was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user account was last updated."
+        }
+      },
+      "required": ["id", "email", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Student peer learning profile including skills, availability, and college info.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the user."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "College or student email address."
+        },
+        "fullName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Full display name of the student."
+        },
+        "avatarUrl": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "URL to student avatar image."
+        },
+        "college": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "University or college institution."
+        },
+        "course": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Academic major or degree program."
+        },
+        "year": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Academic year or graduation class."
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Campus location or city."
+        },
+        "bio": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Brief learning or mentoring bio."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["learner", "mentor", "both"],
+          "description": "Primary role preference."
+        },
+        "activeMode": {
+          "type": "string",
+          "enum": ["learner", "mentor"],
+          "description": "Active toggle mode in the application."
+        },
+        "isOnboarded": {
+          "type": "boolean",
+          "description": "Whether onboarding has been completed."
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Preferred language for peer learning."
+        },
+        "learningFormat": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Preferred study style or format."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp."
+        }
+      },
+      "required": ["id", "email", "fullName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Private user account records restricted to the account owner."
+    },
+    "/profiles/{userId}": {
+      "schema": "UserProfile",
+      "description": "Student peer profiles visible to authenticated university peers."
+    }
+  }
+}

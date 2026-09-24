@@ -1,0 +1,85 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global hardened security helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation for private user account
+    function isValidUser(data) {
+      return data.id is string &&
+             data.id == request.auth.uid &&
+             data.email is string &&
+             data.email.size() > 0 &&
+             data.email.size() <= 120 &&
+             (!('emailVerified' in data) || data.emailVerified is bool) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
+    }
+
+    // Validation for public student profile
+    function isValidProfile(data) {
+      return data.id is string &&
+             data.id == request.auth.uid &&
+             data.email is string &&
+             data.email.size() > 0 &&
+             data.email.size() <= 120 &&
+             data.fullName is string &&
+             data.fullName.size() > 0 &&
+             data.fullName.size() <= 100 &&
+             (!('college' in data) || (data.college is string && data.college.size() <= 120)) &&
+             (!('course' in data) || (data.course is string && data.course.size() <= 100)) &&
+             (!('year' in data) || (data.year is string && data.year.size() <= 40)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000)) &&
+             (!('mode' in data) || data.mode in ['learner', 'mentor', 'both']) &&
+             (!('activeMode' in data) || data.activeMode in ['learner', 'mentor']);
+    }
+
+    // Test connection document
+    match /test/{testId} {
+      allow get: if true;
+    }
+
+    // Private user accounts (PII & sensitive authentication data)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUser(incoming());
+      allow update: if isValidId(userId) && isOwner(userId) && isValidUser(incoming()) && incoming().id == existing().id;
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+
+    // University Peer Profiles (viewable by authenticated peers, editable only by profile owner)
+    match /profiles/{userId} {
+      allow get: if isValidId(userId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isValidId(userId) && isOwner(userId) && isValidProfile(incoming());
+      allow update: if isValidId(userId) && isOwner(userId) && isValidProfile(incoming()) && incoming().id == existing().id;
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+  }
+}
