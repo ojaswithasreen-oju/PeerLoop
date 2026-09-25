@@ -159,6 +159,121 @@
         }
       },
       "required": ["id", "email", "fullName", "createdAt"]
+    },
+    "Lecture": {
+      "title": "Lecture",
+      "description": "Lecture session created and managed by student teachers.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Lecture unique identifier."
+        },
+        "teacherId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the teacher."
+        },
+        "teacherName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Name of the teacher."
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Lecture title."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Lecture description."
+        },
+        "skill": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Skill or topic."
+        },
+        "difficulty": {
+          "type": "string",
+          "enum": ["Beginner", "Intermediate", "Advanced"],
+          "description": "Difficulty level."
+        },
+        "duration": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Duration (e.g. 60 min)."
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Scheduled date."
+        },
+        "time": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Scheduled time."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["1-on-1", "Small Group", "Workshop"],
+          "description": "Format of learning."
+        },
+        "maxStudents": {
+          "type": "number",
+          "description": "Maximum enrollment cap."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Draft", "Upcoming", "Live", "Completed"],
+          "description": "Current lecture status."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp."
+        }
+      },
+      "required": ["id", "teacherId", "title", "skill", "difficulty", "status", "createdAt"]
+    },
+    "LectureStudent": {
+      "title": "LectureStudent",
+      "description": "Student enrollment and attendance record in a lecture.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document ID."
+        },
+        "lectureId": {
+          "type": "string",
+          "description": "ID of the lecture."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Student Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Student name."
+        },
+        "attendance": {
+          "type": "string",
+          "enum": ["Present", "Joined", "Absent"],
+          "description": "Attendance status."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["enrolled", "active", "completed"],
+          "description": "Enrollment status."
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when enrolled or joined."
+        }
+      },
+      "required": ["id", "lectureId", "studentId", "name", "attendance", "status"]
     }
   },
   "firestore": {
@@ -169,6 +284,14 @@
     "/profiles/{userId}": {
       "schema": "UserProfile",
       "description": "Student peer profiles visible to authenticated university peers."
+    },
+    "/lectures/{lectureId}": {
+      "schema": "Lecture",
+      "description": "Peer lectures hosted by student mentors and accessible to enrolled peers."
+    },
+    "/lectures/{lectureId}/students/{studentId}": {
+      "schema": "LectureStudent",
+      "description": "Enrollment and attendance subcollection for lectures."
     }
   }
 }

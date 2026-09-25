@@ -17,6 +17,7 @@ import {
   BookOpen,
   Check,
   X,
+  HelpCircle,
 } from 'lucide-react';
 import { LearningSession, AIInterruptionItem, SessionChatMessage } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -39,7 +40,15 @@ export const SessionRoom: React.FC<SessionRoomProps> = ({ session: initialSessio
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [activeCenterTab, setActiveCenterTab] = useState<'video' | 'notes' | 'resources'>('video');
+
+  // Left panel view: 'notes' | 'resources'
+  const [leftTab, setLeftTab] = useState<'notes' | 'resources'>('notes');
+
+  // Right panel view: 'copilot' | 'chat'
+  const [rightTab, setRightTab] = useState<'copilot' | 'chat'>('copilot');
+
+  // Mobile active tab: 'center' | 'left' | 'right'
+  const [mobileTab, setMobileTab] = useState<'center' | 'left' | 'right'>('center');
 
   // Elapsed timer
   const [elapsedSeconds, setElapsedSeconds] = useState(session.recordingSeconds || 420);
@@ -47,9 +56,6 @@ export const SessionRoom: React.FC<SessionRoomProps> = ({ session: initialSessio
   // Recording state
   const [isRecording, setIsRecording] = useState(session.isRecording || false);
   const [showRecordingConsentModal, setShowRecordingConsentModal] = useState(false);
-
-  // Side panel tabs: 'copilot' | 'chat' | 'notes' | 'resources'
-  const [sideTab, setSideTab] = useState<'copilot' | 'chat' | 'notes' | 'resources'>('copilot');
 
   // Copilot prompt input & state
   const [copilotPromptInput, setCopilotPromptInput] = useState('');
@@ -60,14 +66,31 @@ export const SessionRoom: React.FC<SessionRoomProps> = ({ session: initialSessio
   const [messages, setMessages] = useState<SessionChatMessage[]>(session.chatMessages || []);
 
   // Shared Notes & Scratchpad Code
-  const [sharedNotes, setSharedNotes] = useState(session.sharedNotes || '');
+  const [sharedNotes, setSharedNotes] = useState(
+    session.sharedNotes ||
+      `# PeerLoop Learning Notes: ${session.topic}
+• Mentor: ${session.mentorName}
+• Learner: ${session.learnerName}
+
+Key Concept Insights:
+1. Outer loop index controls row traversal.
+2. Inner loop traverses column items within that row.
+3. List comprehension syntax: [val for row in matrix for val in row]
+`
+  );
   const [scratchpadCode, setScratchpadCode] = useState(
     session.scratchpadCode ||
       `# Collaborative Workspace: ${session.topic}
 # Type code or test examples together in real-time
 
 def explore_nested_loops():
-    matrix = [[1, 2, 3], [4, 5, 6]]
+    matrix = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9]
+    ]
+    
+    print("--- Row by row ---")
     for row in matrix:
         for val in row:
             print(val, end=" ")
@@ -100,7 +123,7 @@ explore_nested_loops()
           }
         })
         .catch(() => {
-          // Camera device fallback
+          // Camera fallback
         });
     } else {
       if (localVideoRef.current) {
@@ -147,40 +170,8 @@ explore_nested_loops()
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    const updated = [...messages, newMsg];
-    setMessages(updated);
+    setMessages((prev) => [...prev, newMsg]);
     setChatInput('');
-
-    if (updated.length % 2 === 0) {
-      triggerCopilotAnalysis(updated);
-    }
-  };
-
-  const triggerCopilotAnalysis = async (currentMsgs: SessionChatMessage[]) => {
-    setCopilotLoading(true);
-    const recentDialogue = currentMsgs
-      .slice(-4)
-      .map((m) => `${m.senderName} (${m.senderRole}): ${m.text}`)
-      .join('\n');
-
-    try {
-      const res = await getSessionCopilotAssistance(
-        session.topic,
-        recentDialogue,
-        sharedNotes,
-        session.mentorName,
-        session.learnerName
-      );
-
-      if (res.items && res.items.length > 0) {
-        setSession((prev) => ({
-          ...prev,
-          copilotItems: [...prev.copilotItems, ...res.items],
-        }));
-      }
-    } finally {
-      setCopilotLoading(false);
-    }
   };
 
   const handleAskCopilot = async (customPrompt?: string) => {
@@ -188,29 +179,63 @@ explore_nested_loops()
     if (!promptToUse.trim()) return;
 
     setCopilotLoading(true);
-    const newCopilotItem: AIInterruptionItem = {
-      id: `ai-ask-${Date.now()}`,
-      type: 'clarification',
-      level: 'suggestion',
-      confidenceText: 'Quick clarification',
-      title: `${promptToUse}`,
-      content:
-        promptToUse.toLowerCase().includes('analogy')
-          ? 'Think of nested loops like a digital clock: the minute hand (outer loop) ticks once only after the second hand (inner loop) has completed all 60 steps.'
-          : promptToUse.toLowerCase().includes('practice')
-          ? 'Question: Given a 3x3 grid, how many times will a nested loop print an element? (Answer: 9 times, because outer runs 3 times and inner runs 3 times for each).'
-          : 'Nested loops execute from top to bottom. For each outer iteration, the entire inner block runs until its condition is fulfilled before advancing.',
-      targetAudience: isMentor ? 'mentor' : 'learner',
-      status: 'active',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setSession((prev) => ({
-      ...prev,
-      copilotItems: [newCopilotItem, ...prev.copilotItems],
-    }));
     setCopilotPromptInput('');
-    setCopilotLoading(false);
+
+    try {
+      const result = await getSessionCopilotAssistance(
+        session.topic,
+        messages.slice(-4).map((m) => `${m.senderName}: ${m.text}`).join('\n') || promptToUse,
+        sharedNotes,
+        session.mentorName,
+        session.learnerName
+      );
+
+      if (result.items && result.items.length > 0) {
+        setSession((prev) => ({
+          ...prev,
+          copilotItems: [...result.items, ...prev.copilotItems],
+        }));
+      } else {
+        const newItem: AIInterruptionItem = {
+          id: `cp-${Date.now()}`,
+          type: 'clarification',
+          level: 'suggestion',
+          confidenceText: 'Quick clarification',
+          title: 'Concept Anchor: ' + session.topic,
+          content:
+            'Think of nested loops like the hands of a clock: the minute hand must complete 60 minutes (inner loop) before the hour hand advances by 1 (outer loop).',
+          targetAudience: isMentor ? 'mentor' : 'learner',
+          status: 'active',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        setSession((prev) => ({
+          ...prev,
+          copilotItems: [newItem, ...prev.copilotItems],
+        }));
+      }
+    } catch {
+      // Fallback response
+      const fallbackItem: AIInterruptionItem = {
+        id: `cp-${Date.now()}`,
+        type: 'clarification',
+        level: 'suggestion',
+        confidenceText: 'Quick clarification',
+        title: 'Simplified Concept Breakdown',
+        content:
+          'Think of nested loops like the hands of a clock: the minute hand must complete 60 minutes (inner loop) before the hour hand advances by 1 (outer loop).',
+        targetAudience: isMentor ? 'mentor' : 'learner',
+        status: 'active',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      setSession((prev) => ({
+        ...prev,
+        copilotItems: [fallbackItem, ...prev.copilotItems],
+      }));
+    } finally {
+      setCopilotLoading(false);
+    }
   };
 
   const handleStartRecording = () => {
@@ -221,7 +246,7 @@ explore_nested_loops()
     }
   };
 
-  const confirmRecordingConsent = () => {
+  const handleConfirmRecordingConsent = () => {
     setIsRecording(true);
     setShowRecordingConsentModal(false);
   };
@@ -229,14 +254,10 @@ explore_nested_loops()
   const handleEndSession = async () => {
     setIsEndingSession(true);
 
-    const transcriptText = messages
-      .map((m) => `${m.timestamp} - ${m.senderName}: ${m.text}`)
-      .join('\n');
-
     const summary = await generateSessionSummary(
       session.topic,
       session.skill,
-      transcriptText,
+      messages.map((m) => `${m.senderName}: ${m.text}`).join('\n'),
       sharedNotes,
       Math.max(1, Math.round(elapsedSeconds / 60))
     );
@@ -264,36 +285,64 @@ explore_nested_loops()
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#F7F8F5] flex flex-col overflow-hidden text-[#1F2933]">
+    <div className="fixed inset-0 z-50 bg-[#F6F4EE] flex flex-col overflow-hidden text-[#202924] font-sans selection:bg-[#DCE6DE] selection:text-[#496456]">
       {/* ---------------------------------------------------- */}
       {/* 1. TOP BAR */}
       {/* ---------------------------------------------------- */}
-      <div className="h-16 border-b border-[#E5EAE7] bg-white px-4 sm:px-6 flex items-center justify-between gap-4">
-        {/* Topic Title */}
+      <header className="h-16 border-b border-[#E3E1D9] bg-white px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0">
+        {/* Left: Topic & Skill */}
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#387B62] shrink-0" />
-          <h2 className="text-sm sm:text-base font-bold text-[#1F2933] truncate">
+          <div className="w-2.5 h-2.5 rounded-full bg-[#496456] shrink-0" />
+          <h2 className="text-sm sm:text-base font-bold text-[#202924] truncate">
             {session.topic || 'Python — Nested Loops'}
           </h2>
-          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-[#DCE9E2] text-[#3F6B5B] hidden sm:inline">
+          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-[#DCE6DE] text-[#496456] hidden sm:inline">
             {session.skill || 'Python'}
           </span>
         </div>
 
-        {/* Status, Timer, Leave */}
-        <div className="flex items-center gap-3">
-          {/* Recording status badge */}
+        {/* Mobile View Switcher */}
+        <div className="flex lg:hidden items-center gap-1 bg-[#F6F4EE] p-1 rounded-lg border border-[#E3E1D9]">
+          <button
+            onClick={() => setMobileTab('left')}
+            className={`px-2.5 py-1 rounded text-xs font-semibold ${
+              mobileTab === 'left' ? 'bg-white text-[#496456] shadow-xs' : 'text-[#69736D]'
+            }`}
+          >
+            Notes
+          </button>
+          <button
+            onClick={() => setMobileTab('center')}
+            className={`px-2.5 py-1 rounded text-xs font-semibold ${
+              mobileTab === 'center' ? 'bg-white text-[#496456] shadow-xs' : 'text-[#69736D]'
+            }`}
+          >
+            Session
+          </button>
+          <button
+            onClick={() => setMobileTab('right')}
+            className={`px-2.5 py-1 rounded text-xs font-semibold ${
+              mobileTab === 'right' ? 'bg-white text-[#496456] shadow-xs' : 'text-[#69736D]'
+            }`}
+          >
+            Copilot
+          </button>
+        </div>
+
+        {/* Right: Timer, Recording, Leave */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Recording badge */}
           {isRecording ? (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
               <span>REC</span>
             </div>
           ) : (
-            <span className="text-xs text-[#6B7280] hidden sm:inline">Not Recording</span>
+            <span className="text-xs text-[#69736D] hidden md:inline">Not Recording</span>
           )}
 
           {/* Session Timer */}
-          <div className="font-mono text-xs font-semibold text-[#1F2933] bg-[#F7F8F5] px-2.5 py-1 rounded-md border border-[#E5EAE7]">
+          <div className="font-mono text-xs font-semibold text-[#202924] bg-[#F6F4EE] px-2.5 py-1 rounded-md border border-[#E3E1D9]">
             {formatTimer(elapsedSeconds)}
           </div>
 
@@ -313,144 +362,155 @@ explore_nested_loops()
             )}
           </button>
         </div>
-      </div>
+      </header>
 
       {/* ---------------------------------------------------- */}
-      {/* 2. WORKSPACE AREA */}
+      {/* 2. THREE-COLUMN DESKTOP WORKSPACE LAYOUT */}
+      {/* LEFT: Notes / Resources */}
+      {/* CENTER: Mentor session */}
+      {/* RIGHT: AI Copilot / Chat */}
       {/* ---------------------------------------------------- */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* Main Stage */}
-        <div className="flex-1 flex flex-col bg-[#F7F8F5] overflow-hidden">
-          {/* Stage Switcher Tabs */}
-          <div className="h-10 border-b border-[#E5EAE7] bg-white px-4 flex items-center gap-2">
-            <button
-              onClick={() => setActiveCenterTab('video')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
-                activeCenterTab === 'video'
-                  ? 'bg-[#DCE9E2] text-[#3F6B5B]'
-                  : 'text-[#6B7280] hover:text-[#1F2933]'
-              }`}
-            >
-              <VideoIcon className="w-3.5 h-3.5" />
-              <span>Video</span>
-            </button>
-            <button
-              onClick={() => setActiveCenterTab('notes')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
-                activeCenterTab === 'notes'
-                  ? 'bg-[#DCE9E2] text-[#3F6B5B]'
-                  : 'text-[#6B7280] hover:text-[#1F2933]'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Notes</span>
-            </button>
-            <button
-              onClick={() => setActiveCenterTab('resources')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
-                activeCenterTab === 'resources'
-                  ? 'bg-[#DCE9E2] text-[#3F6B5B]'
-                  : 'text-[#6B7280] hover:text-[#1F2933]'
-              }`}
-            >
-              <Code className="w-3.5 h-3.5" />
-              <span>Resources &amp; Code</span>
-            </button>
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[#F6F4EE]">
+        {/* ==================================================== */}
+        {/* LEFT COLUMN: NOTES / RESOURCES */}
+        {/* ==================================================== */}
+        <div
+          className={`w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-r border-[#E3E1D9] bg-white flex flex-col ${
+            mobileTab === 'left' ? 'flex-1' : 'hidden lg:flex'
+          }`}
+        >
+          {/* Header tabs: Notes / Resources */}
+          <div className="h-11 border-b border-[#E3E1D9] px-4 flex items-center justify-between bg-[#F6F4EE]/50">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setLeftTab('notes')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                  leftTab === 'notes'
+                    ? 'bg-white text-[#496456] shadow-xs border border-[#E3E1D9]'
+                    : 'text-[#69736D] hover:text-[#202924]'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Notes</span>
+              </button>
+              <button
+                onClick={() => setLeftTab('resources')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                  leftTab === 'resources'
+                    ? 'bg-white text-[#496456] shadow-xs border border-[#E3E1D9]'
+                    : 'text-[#69736D] hover:text-[#202924]'
+                }`}
+              >
+                <Code className="w-3.5 h-3.5" />
+                <span>Resources &amp; Code</span>
+              </button>
+            </div>
+            <span className="text-[10px] font-mono text-[#69736D]">Syncing</span>
           </div>
 
-          {/* Stage Body */}
-          <div className="flex-1 p-4 overflow-hidden flex flex-col">
-            {activeCenterTab === 'video' && (
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-hidden">
-                {/* Peer / Mentor Video Card */}
-                <div className="relative rounded-2xl bg-white border border-[#E5EAE7] overflow-hidden flex flex-col items-center justify-center p-6 shadow-xs">
-                  <div className="relative flex flex-col items-center">
-                    <img
-                      src={isMentor ? session.learnerAvatar : session.mentorAvatar}
-                      alt="Peer"
-                      className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 border-[#DCE9E2]"
-                    />
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#387B62] border-2 border-white flex items-center justify-center">
-                      <Volume2 className="w-3.5 h-3.5 text-white" />
-                    </div>
-                  </div>
-                  <p className="text-sm font-bold text-[#1F2933] mt-3">
-                    {isMentor ? session.learnerName : session.mentorName}
-                  </p>
-                  <p className="text-xs text-[#6B7280]">
-                    {isMentor ? session.learnerCollege : session.mentorCollege}
-                  </p>
-                  <div className="absolute bottom-3 left-3 text-[11px] text-[#6B7280] bg-[#F7F8F5] border border-[#E5EAE7] px-2 py-0.5 rounded">
-                    {isMentor ? 'Learner' : 'Mentor'}
-                  </div>
-                </div>
-
-                {/* You Video Card */}
-                <div className="relative rounded-2xl bg-white border border-[#E5EAE7] overflow-hidden flex flex-col items-center justify-center p-6 shadow-xs">
-                  {isCameraOn ? (
-                    <video
-                      ref={localVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover transform -scale-x-100 rounded-xl"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center">
-                      <img
-                        src={currentUser?.avatarUrl}
-                        alt="You"
-                        className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 border-[#E5EAE7]"
-                      />
-                      <p className="text-sm font-bold text-[#1F2933] mt-3">You ({currentUser?.fullName})</p>
-                      <span className="text-xs text-[#6B7280] mt-0.5">Camera Off</span>
-                    </div>
-                  )}
-                  <div className="absolute bottom-3 left-3 text-[11px] text-[#6B7280] bg-[#F7F8F5] border border-[#E5EAE7] px-2 py-0.5 rounded">
-                    You {!isMicOn && '• Mic Muted'}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeCenterTab === 'notes' && (
-              <div className="flex-1 flex flex-col bg-white rounded-2xl border border-[#E5EAE7] overflow-hidden">
-                <div className="p-3 bg-[#F7F8F5] border-b border-[#E5EAE7] flex items-center justify-between text-xs text-[#6B7280]">
-                  <span className="font-semibold text-[#1F2933]">Session Notes</span>
-                  <span>Auto-saved to session summary</span>
+          {/* Left Body */}
+          <div className="flex-1 p-3 overflow-hidden flex flex-col">
+            {leftTab === 'notes' ? (
+              <div className="flex-1 flex flex-col bg-white rounded-xl border border-[#E3E1D9] overflow-hidden">
+                <div className="px-3 py-2 bg-[#F6F4EE] border-b border-[#E3E1D9] flex items-center justify-between text-[11px] text-[#69736D]">
+                  <span className="font-semibold text-[#202924]">Collaborative Notes</span>
+                  <span>Auto-saved</span>
                 </div>
                 <textarea
                   value={sharedNotes}
                   onChange={(e) => setSharedNotes(e.target.value)}
-                  placeholder="Record insights, questions, and concept reminders here..."
-                  className="flex-1 w-full bg-white p-4 text-xs sm:text-sm text-[#1F2933] focus:outline-none resize-none leading-relaxed"
+                  placeholder="Record insights, questions, and concept reminders together..."
+                  className="flex-1 w-full p-3.5 text-xs text-[#202924] placeholder-[#69736D] focus:outline-none resize-none leading-relaxed font-sans"
                 />
               </div>
-            )}
-
-            {activeCenterTab === 'resources' && (
-              <div className="flex-1 flex flex-col bg-white rounded-2xl border border-[#E5EAE7] overflow-hidden">
-                <div className="p-3 bg-[#F7F8F5] border-b border-[#E5EAE7] flex items-center justify-between text-xs text-[#6B7280]">
-                  <span className="font-mono font-semibold text-[#1F2933]">nested_loops.py</span>
-                  <span className="text-[#387B62] font-semibold">Live Shared</span>
+            ) : (
+              <div className="flex-1 flex flex-col bg-white rounded-xl border border-[#E3E1D9] overflow-hidden">
+                <div className="px-3 py-2 bg-[#F6F4EE] border-b border-[#E3E1D9] flex items-center justify-between text-[11px] text-[#69736D]">
+                  <span className="font-mono font-semibold text-[#202924]">scratchpad.py</span>
+                  <span className="text-[#387B62] font-semibold">Shared Python</span>
                 </div>
                 <textarea
                   value={scratchpadCode}
                   onChange={(e) => setScratchpadCode(e.target.value)}
-                  className="flex-1 w-full bg-[#FAFAF8] p-4 font-mono text-xs sm:text-sm text-[#1F2933] focus:outline-none resize-none leading-relaxed"
+                  className="flex-1 w-full bg-[#FAFAF8] p-3.5 font-mono text-xs text-[#202924] focus:outline-none resize-none leading-relaxed"
                   spellCheck={false}
                 />
               </div>
             )}
           </div>
+        </div>
 
-          {/* Controls Bar: Mic, Camera, Screen Share, Chat, Notes, Leave */}
-          <div className="h-16 border-t border-[#E5EAE7] bg-white px-4 flex items-center justify-center gap-3">
+        {/* ==================================================== */}
+        {/* CENTER COLUMN: MENTOR SESSION */}
+        {/* ==================================================== */}
+        <div
+          className={`flex-1 flex flex-col overflow-hidden bg-[#F6F4EE] ${
+            mobileTab === 'center' ? 'flex' : 'hidden lg:flex'
+          }`}
+        >
+          {/* Main Stage Grid: Peer and Learner feeds */}
+          <div className="flex-1 p-4 overflow-y-auto flex flex-col justify-center gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto w-full">
+              {/* 1. Peer / Mentor Card */}
+              <div className="relative rounded-2xl bg-white border border-[#E3E1D9] overflow-hidden flex flex-col items-center justify-center p-8 shadow-xs min-h-[260px]">
+                <div className="relative flex flex-col items-center">
+                  <img
+                    src={isMentor ? session.learnerAvatar : session.mentorAvatar}
+                    alt="Peer"
+                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 border-[#DCE6DE]"
+                  />
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#496456] border-2 border-white flex items-center justify-center shadow-xs">
+                    <Volume2 className="w-3.5 h-3.5 text-white" />
+                  </div>
+                </div>
+                <p className="text-sm font-bold text-[#202924] mt-3.5">
+                  {isMentor ? session.learnerName : session.mentorName}
+                </p>
+                <p className="text-xs text-[#69736D]">
+                  {isMentor ? session.learnerCollege : session.mentorCollege}
+                </p>
+                <div className="absolute top-3 left-3 text-[10px] font-semibold text-[#496456] bg-[#DCE6DE] px-2.5 py-0.5 rounded-full">
+                  {isMentor ? 'Learner' : 'Mentor'}
+                </div>
+              </div>
+
+              {/* 2. Self Video Card */}
+              <div className="relative rounded-2xl bg-white border border-[#E3E1D9] overflow-hidden flex flex-col items-center justify-center p-8 shadow-xs min-h-[260px]">
+                {isCameraOn ? (
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover transform -scale-x-100 rounded-xl"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <img
+                      src={currentUser?.avatarUrl}
+                      alt="You"
+                      className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border border-[#E3E1D9]"
+                    />
+                    <p className="text-sm font-bold text-[#202924] mt-3.5">
+                      You ({currentUser?.fullName})
+                    </p>
+                    <span className="text-xs text-[#69736D] mt-0.5">Camera Off</span>
+                  </div>
+                )}
+                <div className="absolute top-3 left-3 text-[10px] font-semibold text-[#202924] bg-[#F6F4EE] border border-[#E3E1D9] px-2.5 py-0.5 rounded-full">
+                  You {!isMicOn && '• Muted'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Center Call Controls Bar */}
+          <div className="h-16 border-t border-[#E3E1D9] bg-white px-4 flex items-center justify-center gap-3 shrink-0">
             <button
               onClick={() => setIsMicOn(!isMicOn)}
-              className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
+              className={`p-2.5 rounded-xl border transition-colors cursor-pointer ${
                 isMicOn
-                  ? 'bg-white border-[#E5EAE7] text-[#1F2933] hover:bg-[#F7F8F5]'
+                  ? 'bg-white border-[#E3E1D9] text-[#202924] hover:bg-[#F6F4EE]'
                   : 'bg-rose-50 border-rose-200 text-rose-600'
               }`}
               title={isMicOn ? 'Mute Mic' : 'Unmute Mic'}
@@ -460,9 +520,9 @@ explore_nested_loops()
 
             <button
               onClick={() => setIsCameraOn(!isCameraOn)}
-              className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
+              className={`p-2.5 rounded-xl border transition-colors cursor-pointer ${
                 isCameraOn
-                  ? 'bg-white border-[#E5EAE7] text-[#1F2933] hover:bg-[#F7F8F5]'
+                  ? 'bg-white border-[#E3E1D9] text-[#202924] hover:bg-[#F6F4EE]'
                   : 'bg-rose-50 border-rose-200 text-rose-600'
               }`}
               title={isCameraOn ? 'Turn off camera' : 'Turn on camera'}
@@ -472,10 +532,10 @@ explore_nested_loops()
 
             <button
               onClick={() => setIsScreenSharing(!isScreenSharing)}
-              className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
+              className={`p-2.5 rounded-xl border transition-colors cursor-pointer ${
                 isScreenSharing
-                  ? 'bg-[#3F6B5B] text-white border-[#3F6B5B]'
-                  : 'bg-white border-[#E5EAE7] text-[#1F2933] hover:bg-[#F7F8F5]'
+                  ? 'bg-[#496456] text-white border-[#496456]'
+                  : 'bg-white border-[#E3E1D9] text-[#202924] hover:bg-[#F6F4EE]'
               }`}
               title="Screen Share"
             >
@@ -483,152 +543,131 @@ explore_nested_loops()
             </button>
 
             <button
-              onClick={() => setSideTab('chat')}
-              className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
-                sideTab === 'chat'
-                  ? 'bg-[#3F6B5B] text-white border-[#3F6B5B]'
-                  : 'bg-white border-[#E5EAE7] text-[#1F2933] hover:bg-[#F7F8F5]'
-              }`}
-              title="Chat"
-            >
-              <MessageSquare className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveCenterTab('notes');
-                setSideTab('notes');
-              }}
-              className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
-                sideTab === 'notes'
-                  ? 'bg-[#3F6B5B] text-white border-[#3F6B5B]'
-                  : 'bg-white border-[#E5EAE7] text-[#1F2933] hover:bg-[#F7F8F5]'
-              }`}
-              title="Notes"
-            >
-              <FileText className="w-4 h-4" />
-            </button>
-
-            <button
               onClick={handleStartRecording}
-              className={`p-2.5 rounded-lg border transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
+              className={`px-3 py-2 rounded-xl border transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
                 isRecording
                   ? 'bg-rose-600 text-white border-rose-600'
-                  : 'bg-white border-[#E5EAE7] text-[#1F2933] hover:bg-[#F7F8F5]'
+                  : 'bg-white border-[#E3E1D9] text-[#202924] hover:bg-[#F6F4EE]'
               }`}
-              title="Recording"
+              title="Session Recording"
             >
               <Circle className={`w-3.5 h-3.5 ${isRecording ? 'fill-current' : 'text-rose-500'}`} />
               <span className="hidden sm:inline">{isRecording ? 'Stop REC' : 'Record'}</span>
             </button>
-
-            <button
-              onClick={handleEndSession}
-              disabled={isEndingSession}
-              className="px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <PhoneOff className="w-3.5 h-3.5" />
-              <span>Leave</span>
-            </button>
           </div>
         </div>
 
-        {/* ---------------------------------------------------- */}
-        {/* 3. RIGHT SIDE PANEL (AI COPILOT & CHAT) */}
-        {/* ---------------------------------------------------- */}
-        <div className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-[#E5EAE7] bg-white flex flex-col h-80 lg:h-full">
-          {/* Header Tabs */}
-          <div className="h-12 border-b border-[#E5EAE7] px-3 flex items-center justify-between">
+        {/* ==================================================== */}
+        {/* RIGHT COLUMN: AI COPILOT / CHAT */}
+        {/* ==================================================== */}
+        <div
+          className={`w-full lg:w-80 xl:w-96 border-t lg:border-t-0 lg:border-l border-[#E3E1D9] bg-white flex flex-col ${
+            mobileTab === 'right' ? 'flex-1' : 'hidden lg:flex'
+          }`}
+        >
+          {/* Header Tabs: AI Copilot / Chat */}
+          <div className="h-11 border-b border-[#E3E1D9] px-4 flex items-center justify-between bg-[#F6F4EE]/50">
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setSideTab('copilot')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
-                  sideTab === 'copilot'
-                    ? 'bg-[#DCE9E2] text-[#3F6B5B]'
-                    : 'text-[#6B7280] hover:text-[#1F2933]'
+                onClick={() => setRightTab('copilot')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                  rightTab === 'copilot'
+                    ? 'bg-white text-[#496456] shadow-xs border border-[#E3E1D9]'
+                    : 'text-[#69736D] hover:text-[#202924]'
                 }`}
               >
-                AI Copilot
+                <Sparkles className="w-3.5 h-3.5 text-[#496456]" />
+                <span>AI Copilot</span>
               </button>
               <button
-                onClick={() => setSideTab('chat')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
-                  sideTab === 'chat'
-                    ? 'bg-[#DCE9E2] text-[#3F6B5B]'
-                    : 'text-[#6B7280] hover:text-[#1F2933]'
+                onClick={() => setRightTab('chat')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                  rightTab === 'chat'
+                    ? 'bg-white text-[#496456] shadow-xs border border-[#E3E1D9]'
+                    : 'text-[#69736D] hover:text-[#202924]'
                 }`}
               >
-                Chat
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Chat</span>
               </button>
             </div>
-
-            <span className="text-[10px] text-[#387B62] font-semibold bg-[#DCE9E2] px-2 py-0.5 rounded">
-              Active
+            <span className="text-[10px] text-[#496456] font-semibold bg-[#DCE6DE] px-2 py-0.5 rounded-full">
+              Supportive
             </span>
           </div>
 
-          {/* TAB: AI COPILOT */}
-          {sideTab === 'copilot' && (
+          {/* TAB 1: AI COPILOT */}
+          {rightTab === 'copilot' && (
             <div className="flex-1 flex flex-col overflow-hidden p-4 space-y-4">
-              {/* Subtle Sage Highlighted Panel */}
-              <div className="p-4 rounded-xl bg-[#F0F4F1] border border-[#DCE9E2] space-y-3">
-                <div>
-                  <h4 className="text-xs font-bold text-[#3F6B5B] uppercase tracking-wide">
-                    AI Copilot
-                  </h4>
-                  <p className="text-sm font-semibold text-[#1F2933] mt-0.5">
-                    &ldquo;Would you like a simpler explanation?&rdquo;
-                  </p>
+              {/* Contextual Copilot Prompt Card */}
+              <div className="p-4 rounded-xl bg-[#F6F4EE] border border-[#E3E1D9] space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-md bg-[#DCE6DE] text-[#496456] flex items-center justify-center">
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </span>
+                  <div>
+                    <h4 className="text-[11px] font-bold text-[#496456] uppercase tracking-wide">
+                      AI Copilot
+                    </h4>
+                    <p className="text-xs font-semibold text-[#202924]">
+                      “Want a simpler explanation?”
+                    </p>
+                  </div>
                 </div>
 
-                {/* Copilot Action Buttons */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                {/* Actions: Explain, Give Example, Practice */}
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
                   <button
-                    onClick={() => handleAskCopilot('Explain nested loops with an everyday analogy')}
-                    className="px-2.5 py-1 rounded-md bg-white border border-[#E5EAE7] hover:bg-[#DCE9E2] text-xs font-medium text-[#1F2933] transition-colors cursor-pointer"
+                    onClick={() => handleAskCopilot('Explain nested loops with an everyday intuitive analogy')}
+                    className="px-2 py-1.5 rounded-lg bg-white border border-[#E3E1D9] hover:bg-[#DCE6DE] text-[11px] font-semibold text-[#202924] transition-colors cursor-pointer text-center"
                   >
-                    Explain differently
+                    Explain
                   </button>
                   <button
                     onClick={() => handleAskCopilot('Give a practical code example of nested loops')}
-                    className="px-2.5 py-1 rounded-md bg-white border border-[#E5EAE7] hover:bg-[#DCE9E2] text-xs font-medium text-[#1F2933] transition-colors cursor-pointer"
+                    className="px-2 py-1.5 rounded-lg bg-white border border-[#E3E1D9] hover:bg-[#DCE6DE] text-[11px] font-semibold text-[#202924] transition-colors cursor-pointer text-center"
                   >
-                    Give example
+                    Give Example
                   </button>
                   <button
-                    onClick={() => handleAskCopilot('Provide a quick practice question to test understanding')}
-                    className="px-2.5 py-1 rounded-md bg-white border border-[#E5EAE7] hover:bg-[#DCE9E2] text-xs font-medium text-[#1F2933] transition-colors cursor-pointer"
+                    onClick={() => handleAskCopilot('Provide a short practice question to verify understanding')}
+                    className="px-2 py-1.5 rounded-lg bg-white border border-[#E3E1D9] hover:bg-[#DCE6DE] text-[11px] font-semibold text-[#202924] transition-colors cursor-pointer text-center"
                   >
                     Practice
                   </button>
                 </div>
               </div>
 
-              {/* Copilot Stream of Contextual Notes */}
+              {/* Copilot Stream */}
               <div className="flex-1 overflow-y-auto space-y-3">
                 {session.copilotItems.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-[#6B7280] space-y-1">
-                    <p>Copilot supports the session quietly in the background.</p>
-                    <p className="text-[11px]">Click an action above or type below for assistance.</p>
+                  <div className="py-8 text-center text-xs text-[#69736D] space-y-1">
+                    <p className="font-medium text-[#202924]">Supportive learning copilot</p>
+                    <p className="text-[11px]">
+                      AI assists the human mentoring session quietly without interrupting the flow.
+                    </p>
                   </div>
                 ) : (
                   session.copilotItems.map((item) => (
                     <div
                       key={item.id}
-                      className="p-3 rounded-xl bg-white border border-[#E5EAE7] space-y-1 text-xs"
+                      className="p-3.5 rounded-xl bg-white border border-[#E3E1D9] space-y-1.5 text-xs shadow-xs"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-[#3F6B5B]">{item.title}</span>
-                        <span className="text-[10px] text-[#6B7280]">{item.timestamp}</span>
+                        <span className="font-semibold text-[#496456] flex items-center gap-1.5">
+                          <Sparkles className="w-3 h-3 text-[#C9825B]" />
+                          <span>{item.title}</span>
+                        </span>
+                        <span className="text-[10px] text-[#69736D] font-mono">{item.timestamp}</span>
                       </div>
-                      <p className="text-[#1F2933] leading-relaxed">{item.content}</p>
+                      <p className="text-[#202924] leading-relaxed font-sans">{item.content}</p>
                     </div>
                   ))
                 )}
               </div>
 
-              {/* Copilot Input */}
-              <div className="pt-2 border-t border-[#E5EAE7]">
+              {/* Custom Copilot Query Input */}
+              <div className="pt-2 border-t border-[#E3E1D9]">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -636,12 +675,12 @@ explore_nested_loops()
                     onChange={(e) => setCopilotPromptInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAskCopilot()}
                     placeholder="Ask Copilot a question..."
-                    className="flex-1 bg-[#F7F8F5] border border-[#E5EAE7] rounded-lg px-3 py-1.5 text-xs text-[#1F2933] placeholder-[#6B7280] focus:outline-none focus:border-[#3F6B5B]"
+                    className="flex-1 bg-[#F6F4EE] border border-[#E3E1D9] rounded-lg px-3 py-1.5 text-xs text-[#202924] placeholder-[#69736D] focus:outline-none focus:border-[#496456]"
                   />
                   <button
                     onClick={() => handleAskCopilot()}
                     disabled={copilotLoading || !copilotPromptInput.trim()}
-                    className="px-3 py-1.5 rounded-lg bg-[#3F6B5B] hover:bg-[#34594B] text-white text-xs font-semibold disabled:opacity-50 transition-colors"
+                    className="px-3 py-1.5 rounded-lg bg-[#496456] hover:bg-[#3d5347] text-white text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer"
                   >
                     Ask
                   </button>
@@ -650,10 +689,10 @@ explore_nested_loops()
             </div>
           )}
 
-          {/* TAB: CHAT */}
-          {sideTab === 'chat' && (
+          {/* TAB 2: CHAT */}
+          {rightTab === 'chat' && (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-1 p-3 overflow-y-auto space-y-2.5">
+              <div className="flex-1 p-3.5 overflow-y-auto space-y-2.5">
                 {messages.map((m) => {
                   const isMe = m.senderId === currentUser?.id;
                   return (
@@ -661,16 +700,14 @@ explore_nested_loops()
                       key={m.id}
                       className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                     >
-                      <div className="flex items-center gap-1 text-[10px] text-[#6B7280] mb-0.5">
-                        <span className="font-semibold">{m.senderName}</span>
-                        <span>•</span>
-                        <span>{m.timestamp}</span>
-                      </div>
+                      <span className="text-[10px] text-[#69736D] mb-0.5">
+                        {isMe ? 'You' : m.senderName} • {m.timestamp}
+                      </span>
                       <div
-                        className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
+                        className={`p-2.5 rounded-xl text-xs max-w-[85%] leading-relaxed ${
                           isMe
-                            ? 'bg-[#3F6B5B] text-white'
-                            : 'bg-[#F7F8F5] border border-[#E5EAE7] text-[#1F2933]'
+                            ? 'bg-[#496456] text-white'
+                            : 'bg-[#F6F4EE] border border-[#E3E1D9] text-[#202924]'
                         }`}
                       >
                         {m.text}
@@ -681,81 +718,75 @@ explore_nested_loops()
                 <div ref={chatBottomRef} />
               </div>
 
-              <form onSubmit={handleSendMessage} className="p-3 border-t border-[#E5EAE7] bg-white">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Type message..."
-                    className="flex-1 bg-[#F7F8F5] border border-[#E5EAE7] rounded-lg px-3 py-1.5 text-xs text-[#1F2933] placeholder-[#6B7280] focus:outline-none focus:border-[#3F6B5B]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!chatInput.trim()}
-                    className="p-2 rounded-lg bg-[#3F6B5B] hover:bg-[#34594B] text-white disabled:opacity-50 transition-colors"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+              {/* Chat Input */}
+              <form onSubmit={handleSendMessage} className="p-3 border-t border-[#E3E1D9] flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Send a message..."
+                  className="flex-1 bg-[#F6F4EE] border border-[#E3E1D9] rounded-lg px-3 py-1.5 text-xs text-[#202924] placeholder-[#69736D] focus:outline-none focus:border-[#496456]"
+                />
+                <button
+                  type="submit"
+                  disabled={!chatInput.trim()}
+                  className="p-2 rounded-lg bg-[#496456] hover:bg-[#3d5347] text-white disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
               </form>
             </div>
           )}
         </div>
       </div>
 
+      {/* ---------------------------------------------------- */}
+      {/* 3. MODALS */}
+      {/* ---------------------------------------------------- */}
       {/* Recording Consent Modal */}
       <Modal
         isOpen={showRecordingConsentModal}
         onClose={() => setShowRecordingConsentModal(false)}
-        title="Record This Learning Session?"
-        subtitle="Participant privacy & mutual consent required"
-        maxWidth="md"
+        title="Session Recording"
+        subtitle="Consent required for recording"
       >
         <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-[#F0F4F1] border border-[#DCE9E2] text-xs text-[#1F2933] space-y-2">
-            <div className="flex items-center gap-2 text-[#3F6B5B] font-semibold">
-              <Shield className="w-4 h-4" />
-              <span>Transparent Recording Policy</span>
-            </div>
-            <p className="text-[#6B7280] leading-relaxed">
-              Recording creates an AI session summary and structured study notes after the session finishes.
-              Either participant can pause or stop the recording at any time.
-            </p>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <p className="text-xs text-[#69736D] leading-relaxed">
+            Recordings allow both participants to review key explanations and code walkthroughs later.
+            Both peers are notified when recording starts.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
             <button
-              type="button"
               onClick={() => setShowRecordingConsentModal(false)}
-              className="px-4 py-2 rounded-lg text-xs font-semibold text-[#6B7280] hover:text-[#1F2933]"
+              className="px-3.5 py-2 rounded-lg text-xs font-semibold text-[#69736D] hover:bg-[#F6F4EE]"
             >
               Cancel
             </button>
             <button
-              type="button"
-              onClick={confirmRecordingConsent}
-              className="px-5 py-2 rounded-lg bg-[#3F6B5B] hover:bg-[#34594B] text-white text-xs font-semibold transition-colors flex items-center gap-1.5"
+              onClick={handleConfirmRecordingConsent}
+              className="px-4 py-2 rounded-lg bg-[#496456] hover:bg-[#3d5347] text-white text-xs font-semibold"
             >
-              <Circle className="w-3 h-3 fill-white" />
-              <span>Start Recording</span>
+              Start Recording
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* Post-Session Feedback Modal */}
+      {/* Feedback Modal for Learner */}
       <FeedbackModal
         isOpen={showFeedbackModal}
         onClose={() => {
           setShowFeedbackModal(false);
-          setShowSummaryModal(true);
+          onLeaveSession();
         }}
         session={session}
-        onFeedbackSubmitted={() => {}}
+        onFeedbackSubmitted={(_updatedRep) => {
+          setShowFeedbackModal(false);
+          onLeaveSession();
+        }}
       />
 
-      {/* Post-Session Summary Modal */}
+      {/* Summary Modal for Mentor */}
       <SessionSummaryModal
         isOpen={showSummaryModal}
         onClose={() => {

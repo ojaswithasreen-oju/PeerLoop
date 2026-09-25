@@ -5,6 +5,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreError';
@@ -19,6 +20,10 @@ import {
   UserAccount,
   OnboardingData,
   UserSkill,
+  Lecture,
+  LectureStudent,
+  LectureSummary,
+  LectureStatus,
 } from '../types';
 import {
   DEMO_USERS,
@@ -26,6 +31,8 @@ import {
   DEMO_SESSIONS,
   DEMO_COMMUNITY_POSTS,
   DEMO_RESOURCES,
+  DEMO_LECTURES,
+  DEMO_LECTURE_STUDENTS,
 } from './seedData';
 
 const LOCAL_STORAGE_KEY_PREFIX = 'peerloop_';
@@ -76,6 +83,12 @@ export class StoreService {
     }
     if (!localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + 'resources')) {
       setLocal('resources', DEMO_RESOURCES);
+    }
+    if (!localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + 'lectures')) {
+      setLocal('lectures', DEMO_LECTURES);
+    }
+    if (!localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + 'lecture_students')) {
+      setLocal('lecture_students', DEMO_LECTURE_STUDENTS);
     }
     if (!localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + 'notifications')) {
       const initialNotifs: NotificationItem[] = [
@@ -489,6 +502,203 @@ export class StoreService {
       if (n.recipientId === userId) n.isRead = true;
     });
     setLocal('notifications', all);
+  }
+
+  // --- LECTURES & TEACHING MODE ---
+  public async getLectures(teacherId?: string): Promise<Lecture[]> {
+    try {
+      const colRef = collection(db, 'lectures');
+      const snapshot = await getDocs(colRef);
+      if (!snapshot.empty) {
+        const firestoreLectures = snapshot.docs.map((d) => d.data() as Lecture);
+        // Merge with local lectures
+        const local = getLocal<Lecture[]>('lectures', DEMO_LECTURES);
+        const map = new Map<string, Lecture>();
+        local.forEach((l) => map.set(l.id, l));
+        firestoreLectures.forEach((l) => map.set(l.id, l));
+        const combined = Array.from(map.values());
+        setLocal('lectures', combined);
+        if (teacherId) {
+          return combined.filter((l) => l.teacherId === teacherId);
+        }
+        return combined;
+      }
+    } catch (e: unknown) {
+      console.warn('Firestore getLectures fallback:', e);
+    }
+    const all = getLocal<Lecture[]>('lectures', DEMO_LECTURES);
+    if (teacherId) {
+      return all.filter((l) => l.teacherId === teacherId);
+    }
+    return all;
+  }
+
+  public async getLectureById(id: string): Promise<Lecture | null> {
+    try {
+      const docRef = doc(db, 'lectures', id);
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists()) {
+        return snapshot.data() as Lecture;
+      }
+    } catch (e: unknown) {
+      console.warn('Firestore getLectureById fallback:', e);
+    }
+    const all = getLocal<Lecture[]>('lectures', DEMO_LECTURES);
+    return all.find((l) => l.id === id) || null;
+  }
+
+  public async saveLecture(lecture: Lecture): Promise<void> {
+    const all = getLocal<Lecture[]>('lectures', DEMO_LECTURES);
+    const idx = all.findIndex((l) => l.id === lecture.id);
+    if (idx >= 0) {
+      all[idx] = lecture;
+    } else {
+      all.unshift(lecture);
+    }
+    setLocal('lectures', all);
+
+    if (auth.currentUser && auth.currentUser.uid === lecture.teacherId) {
+      const path = `lectures/${lecture.id}`;
+      try {
+        await setDoc(doc(db, 'lectures', lecture.id), lecture, { merge: true });
+      } catch (e: unknown) {
+        handleFirestoreError(e, OperationType.WRITE, path);
+      }
+    }
+  }
+
+  public async deleteLecture(id: string, teacherId: string): Promise<void> {
+    const all = getLocal<Lecture[]>('lectures', DEMO_LECTURES);
+    const filtered = all.filter((l) => l.id !== id);
+    setLocal('lectures', filtered);
+
+    if (auth.currentUser && auth.currentUser.uid === teacherId) {
+      const path = `lectures/${id}`;
+      try {
+        await deleteDoc(doc(db, 'lectures', id));
+      } catch (e: unknown) {
+        handleFirestoreError(e, OperationType.DELETE, path);
+      }
+    }
+  }
+
+  public async updateLectureStatus(id: string, status: LectureStatus): Promise<void> {
+    const all = getLocal<Lecture[]>('lectures', DEMO_LECTURES);
+    const lecture = all.find((l) => l.id === id);
+    if (lecture) {
+      lecture.status = status;
+      lecture.updatedAt = new Date().toISOString();
+      await this.saveLecture(lecture);
+    }
+  }
+
+  public async updateLectureSummary(id: string, summary: LectureSummary): Promise<void> {
+    const all = getLocal<Lecture[]>('lectures', DEMO_LECTURES);
+    const lecture = all.find((l) => l.id === id);
+    if (lecture) {
+      lecture.summary = summary;
+      lecture.status = 'Completed';
+      lecture.updatedAt = new Date().toISOString();
+      await this.saveLecture(lecture);
+    }
+  }
+
+  public async getStudentsForLecture(lectureId: string): Promise<LectureStudent[]> {
+    try {
+      const colRef = collection(db, 'lectures', lectureId, 'students');
+      const snapshot = await getDocs(colRef);
+      if (!snapshot.empty) {
+        const firestoreStudents = snapshot.docs.map((d) => d.data() as LectureStudent);
+        return firestoreStudents;
+      }
+    } catch (e: unknown) {
+      console.warn('Firestore getStudentsForLecture fallback:', e);
+    }
+    const allStudentsMap = getLocal<Record<string, LectureStudent[]>>('lecture_students', DEMO_LECTURE_STUDENTS);
+    return allStudentsMap[lectureId] || [];
+  }
+
+  public async saveStudentToLecture(student: LectureStudent): Promise<void> {
+    const allStudentsMap = getLocal<Record<string, LectureStudent[]>>('lecture_students', DEMO_LECTURE_STUDENTS);
+    const list = allStudentsMap[student.lectureId] || [];
+    const idx = list.findIndex((s) => s.id === student.id || s.studentId === student.studentId);
+    if (idx >= 0) {
+      list[idx] = student;
+    } else {
+      list.push(student);
+    }
+    allStudentsMap[student.lectureId] = list;
+    setLocal('lecture_students', allStudentsMap);
+
+    if (auth.currentUser) {
+      const path = `lectures/${student.lectureId}/students/${student.id}`;
+      try {
+        await setDoc(doc(db, 'lectures', student.lectureId, 'students', student.id), student, { merge: true });
+      } catch (e: unknown) {
+        handleFirestoreError(e, OperationType.WRITE, path);
+      }
+    }
+  }
+
+  public async getAllMyStudents(teacherId: string): Promise<LectureStudent[]> {
+    const lectures = await this.getLectures(teacherId);
+    const studentMap = new Map<string, LectureStudent>();
+
+    for (const lec of lectures) {
+      const students = await this.getStudentsForLecture(lec.id);
+      students.forEach((s) => {
+        if (!studentMap.has(s.studentId)) {
+          studentMap.set(s.studentId, s);
+        } else {
+          // Merge / update lecture attended count
+          const existing = studentMap.get(s.studentId)!;
+          existing.lecturesAttendedCount = Math.max(
+            existing.lecturesAttendedCount || 1,
+            (existing.lecturesAttendedCount || 1) + 1
+          );
+        }
+      });
+    }
+
+    if (studentMap.size === 0) {
+      // Return default sample students for teacher preview
+      return DEMO_LECTURE_STUDENTS['lec-python-1'] || [];
+    }
+
+    return Array.from(studentMap.values());
+  }
+
+  public async enableTeachingMode(
+    userId: string,
+    data: {
+      skillsToTeach: UserSkill[];
+      availability?: UserProfile['availability'];
+      bio?: string;
+      teachingFormats?: string[];
+    }
+  ): Promise<void> {
+    // 1. Update user account
+    const userAccount = await this.getUserAccount(userId);
+    if (userAccount) {
+      userAccount.learningMode = 'Learn + Teach';
+      userAccount.skillsToTeach = data.skillsToTeach.map((s) => ({
+        name: s.name,
+        level: s.level,
+      }));
+      await this.saveUserAccount(userAccount);
+    }
+
+    // 2. Update user profile
+    const profile = await this.getProfile(userId);
+    if (profile) {
+      profile.mode = 'both';
+      profile.learningMode = 'Learn + Teach';
+      profile.activeMode = 'mentor';
+      profile.skillsToTeach = data.skillsToTeach;
+      if (data.bio) profile.bio = data.bio;
+      if (data.availability) profile.availability = data.availability;
+      await this.saveProfile(profile);
+    }
   }
 }
 

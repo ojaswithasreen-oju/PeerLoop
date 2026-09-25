@@ -72,7 +72,36 @@ service cloud.firestore {
              (!('profileCompleted' in data) || data.profileCompleted is bool) &&
              (!('isOnboarded' in data) || data.isOnboarded is bool) &&
              (!('mode' in data) || data.mode in ['learner', 'mentor', 'both']) &&
+             (!('learningMode' in data) || (data.learningMode is string && data.learningMode.size() <= 50)) &&
              (!('activeMode' in data) || data.activeMode in ['learner', 'mentor']);
+    }
+
+    // Validation for Lecture documents
+    function isValidLecture(data) {
+      return data.id is string &&
+             data.teacherId is string &&
+             data.title is string &&
+             data.title.size() > 0 &&
+             data.title.size() <= 200 &&
+             data.skill is string &&
+             data.skill.size() <= 100 &&
+             data.difficulty in ['Beginner', 'Intermediate', 'Advanced'] &&
+             data.status in ['Draft', 'Upcoming', 'Live', 'Completed'] &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             (!('duration' in data) || (data.duration is string && data.duration.size() <= 50)) &&
+             (!('date' in data) || (data.date is string && data.date.size() <= 50)) &&
+             (!('time' in data) || (data.time is string && data.time.size() <= 50)) &&
+             (!('format' in data) || data.format in ['1-on-1', 'Small Group', 'Workshop']);
+    }
+
+    // Validation for Lecture Student enrollment documents
+    function isValidLectureStudent(data) {
+      return data.studentId is string &&
+             data.name is string &&
+             data.name.size() > 0 &&
+             data.name.size() <= 100 &&
+             data.attendance in ['Present', 'Joined', 'Absent'] &&
+             data.status in ['enrolled', 'active', 'completed'];
     }
 
     // Test connection document
@@ -96,6 +125,28 @@ service cloud.firestore {
       allow create: if isValidId(userId) && isOwner(userId) && isValidProfile(incoming());
       allow update: if isValidId(userId) && isOwner(userId) && isValidProfile(incoming()) && incoming().id == existing().id;
       allow delete: if isValidId(userId) && isOwner(userId);
+    }
+
+    // Lectures
+    match /lectures/{lectureId} {
+      allow get: if isValidId(lectureId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isValidId(lectureId) && isSignedIn() && incoming().teacherId == request.auth.uid && isValidLecture(incoming());
+      allow update: if isValidId(lectureId) && isSignedIn() && (
+        (existing().teacherId == request.auth.uid && isValidLecture(incoming()) && incoming().teacherId == existing().teacherId) ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['studentsPresentCount', 'enrolledCount', 'status'])
+      );
+      allow delete: if isValidId(lectureId) && isSignedIn() && existing().teacherId == request.auth.uid;
+
+      // Lecture Students subcollection
+      match /students/{studentId} {
+        allow get, list: if isValidId(lectureId) && isSignedIn();
+        allow create, update: if isValidId(lectureId) && isValidId(studentId) && isSignedIn() && isValidLectureStudent(incoming());
+        allow delete: if isValidId(lectureId) && isValidId(studentId) && isSignedIn() && (
+          request.auth.uid == studentId ||
+          request.auth.uid == get(/databases/$(database)/documents/lectures/$(lectureId)).data.teacherId
+        );
+      }
     }
   }
 }

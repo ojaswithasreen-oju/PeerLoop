@@ -272,3 +272,72 @@ export interface NotificationItem {
   actionUrl?: string;
   createdAt: string;
 }
+
+export type LectureFormat = '1-on-1' | 'Small Group' | 'Workshop';
+export type LectureStatus = 'Upcoming' | 'Live' | 'Completed' | 'Draft';
+
+export interface LectureResource {
+  id?: string;
+  title: string;
+  type: 'Notes' | 'PDF' | 'Link' | 'Practice';
+  url?: string;
+  content?: string;
+}
+
+export interface LectureSummary {
+  lectureDuration: string;
+  studentsAttended: number;
+  attendancePercentage: number;
+  topicsCovered: string[];
+  questionsAsked: string[];
+  resourcesShared: string[];
+  aiGeneratedSummary: string;
+  savedAt?: string;
+}
+
+export interface LectureStudent {
+  id: string;
+  lectureId: string;
+  studentId: string;
+  name: string;
+  avatarUrl: string;
+  college?: string;
+  learningGoal: string;
+  skillLevel: SkillLevel;
+  attendance: 'Present' | 'Joined' | 'Absent';
+  status: 'enrolled' | 'active' | 'completed';
+  joinedAt: string;
+  lecturesAttendedCount?: number;
+  overallAttendanceRate?: number;
+  progressNote?: string;
+  questionsCount?: number;
+}
+
+export interface Lecture {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  teacherAvatar?: string;
+  teacherCollege?: string;
+  title: string;
+  description: string;
+  skill: string;
+  difficulty: SkillLevel;
+  learningObjectives: string[];
+  duration: string;
+  date: string;
+  time: string;
+  format: LectureFormat;
+  maxStudents: number;
+  enrolledCount: number;
+  studentsPresentCount: number;
+  status: LectureStatus;
+  resources: LectureResource[];
+  privateNotes?: string;
+  practiceQuestions?: string[];
+  summary?: LectureSummary;
+  rating?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+

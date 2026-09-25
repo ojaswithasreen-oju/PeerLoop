@@ -15,13 +15,15 @@ import { SavedResourcesView } from './components/resources/SavedResourcesView';
 import { NotificationsView } from './components/notifications/NotificationsView';
 import { SettingsView } from './components/settings/SettingsView';
 import { SessionRoom } from './components/session/SessionRoom';
+import { LectureRoom } from './components/teach/LectureRoom';
+import { LectureSummaryModal } from './components/teach/LectureSummaryModal';
 import { QuickDoubtModal } from './components/learn/QuickDoubtModal';
 import { StudentProfileModal } from './components/profile/StudentProfileModal';
 import { LandingPage } from './components/landing/LandingPage';
 import { AuthModal } from './components/auth/AuthModal';
 import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
 import { store } from './services/storeService';
-import { LearningSession, UserProfile } from './types';
+import { LearningSession, UserProfile, Lecture, LectureSummary } from './types';
 import { CheckCircle2, X } from 'lucide-react';
 
 const TAB_TO_PATH: Record<string, string> = {
@@ -86,6 +88,11 @@ const AppContent: React.FC = () => {
 
   // Authenticated workspace states
   const [activeSession, setActiveSession] = useState<LearningSession | null>(null);
+  const [activeLecture, setActiveLecture] = useState<Lecture | null>(null);
+  const [finishedLectureSummary, setFinishedLectureSummary] = useState<{
+    lecture: Lecture;
+    summary: LectureSummary;
+  } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isQuickDoubtOpen, setIsQuickDoubtOpen] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
@@ -326,13 +333,13 @@ const AppContent: React.FC = () => {
   const currentTab = PATH_TO_TAB[currentPath] || 'dashboard';
 
   return (
-    <div className="min-h-screen bg-[#F7F8F5] text-[#1F2933] flex flex-col md:flex-row pb-16 md:pb-0 overflow-x-hidden font-sans">
+    <div className="min-h-screen bg-[#F6F4EE] text-[#202924] flex flex-col pb-16 lg:pb-0 overflow-x-hidden font-sans">
       {/* Optional Top Toast if message still active */}
       {logoutMessage && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed top-5 right-5 sm:right-8 z-50 flex items-center gap-3 px-4 py-3 bg-[#1F2933] text-white border border-[#3F6B5B]/40 rounded-xl shadow-xl animate-in fade-in slide-in-from-top-4 duration-300"
+          className="fixed top-5 right-5 sm:right-8 z-50 flex items-center gap-3 px-4 py-3 bg-[#202924] text-white border border-[#496456]/40 rounded-xl shadow-xl animate-in fade-in slide-in-from-top-4 duration-300"
         >
           <CheckCircle2 className="w-5 h-5 text-[#387B62] shrink-0" />
           <span className="text-sm font-medium text-slate-100">{logoutMessage}</span>
@@ -346,37 +353,26 @@ const AppContent: React.FC = () => {
         </div>
       )}
 
-      {/* 1. LEFT PERSISTENT SIDEBAR */}
-      <AppSidebar
+      {/* Lightweight Desktop Top Navigation System */}
+      <AppTopBar
         currentTab={currentTab}
         onNavigate={handleNavigateTab}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        unreadCount={2}
+        onOpenQuickHelp={() => handleNavigateTab('quick-help')}
+        onSearch={() => {
+          handleNavigateTab('learn');
+        }}
       />
 
-      {/* 2. MAIN APPLICATION CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-[#F7F8F5]">
-        {/* Top App Bar */}
-        <AppTopBar
-          currentTab={currentTab}
-          onNavigate={handleNavigateTab}
-          onOpenQuickHelp={() => handleNavigateTab('quick-help')}
-          onSearch={() => {
-            handleNavigateTab('learn');
-          }}
-        />
-
-        {/* View Switcher Container */}
-        <main className="flex-1 bg-[#F7F8F5] overflow-y-auto">
-          {currentTab === 'dashboard' && (
-            <HomeDashboard
-              onNavigate={handleNavigateTab}
-              onOpenQuickDoubt={() => handleNavigateTab('quick-help')}
-              onStartSession={(sess) => setActiveSession(sess)}
-              onViewProfile={handleViewProfile}
-            />
-          )}
+      {/* Main Application Content Area */}
+      <main className="flex-1 bg-[#F6F4EE] overflow-y-auto">
+        {currentTab === 'dashboard' && (
+          <HomeDashboard
+            onNavigate={handleNavigateTab}
+            onOpenQuickDoubt={() => handleNavigateTab('quick-help')}
+            onStartSession={(sess) => setActiveSession(sess)}
+            onViewProfile={handleViewProfile}
+          />
+        )}
 
           {currentTab === 'learn' && (
             <LearnDiscovery
@@ -403,6 +399,8 @@ const AppContent: React.FC = () => {
           {currentTab === 'teach' && (
             <MentorPortal
               onStartSession={(sess) => setActiveSession(sess)}
+              onOpenLecture={(lec) => setActiveLecture(lec)}
+              onViewStudentProfile={handleViewProfile}
               onOpenQuickDoubt={() => handleNavigateTab('quick-help')}
             />
           )}
@@ -423,7 +421,6 @@ const AppContent: React.FC = () => {
 
           {currentTab === 'settings' && <SettingsView />}
         </main>
-      </div>
 
       {/* 3. MOBILE BOTTOM NAVIGATION */}
       <MobileNav currentTab={currentTab} onNavigate={handleNavigateTab} />
@@ -435,6 +432,37 @@ const AppContent: React.FC = () => {
           onLeaveSession={() => {
             setActiveSession(null);
             handleNavigateTab('sessions');
+          }}
+        />
+      )}
+
+      {/* 4.5. FULLSCREEN DEDICATED LECTURE WORKSPACE */}
+      {activeLecture && (
+        <LectureRoom
+          lecture={activeLecture}
+          onClose={() => setActiveLecture(null)}
+          onEndLecture={(summary) => {
+            const endedLecture: Lecture = {
+              ...activeLecture,
+              status: 'Completed',
+              summary,
+            };
+            setActiveLecture(null);
+            setFinishedLectureSummary({ lecture: endedLecture, summary });
+          }}
+          onViewStudentProfile={handleViewProfile}
+        />
+      )}
+
+      {/* 4.6. POST-LECTURE SUMMARY MODAL */}
+      {finishedLectureSummary && (
+        <LectureSummaryModal
+          isOpen={Boolean(finishedLectureSummary)}
+          onClose={() => setFinishedLectureSummary(null)}
+          lecture={finishedLectureSummary.lecture}
+          summary={finishedLectureSummary.summary}
+          onSaveSummary={() => {
+            setFinishedLectureSummary(null);
           }}
         />
       )}
