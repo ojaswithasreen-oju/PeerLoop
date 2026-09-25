@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Award, ShieldCheck, Zap, BookOpen, Flame, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Award, ShieldCheck, Zap, BookOpen, CheckCircle2 } from 'lucide-react';
 import { MentorBadge } from '../../types';
 
 export const BadgeIcon: React.FC<{ name: string; className?: string }> = ({ name, className = 'w-4 h-4' }) => {
@@ -29,22 +29,16 @@ export const MentorBadgePill: React.FC<{ badge: MentorBadge; size?: 'sm' | 'md' 
   badge,
   size = 'md',
 }) => {
-  const rarityColors = {
-    common: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-    rare: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
-    elite: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-  };
-
   const isSmall = size === 'sm';
 
   return (
     <div
-      className={`inline-flex items-center gap-1.5 rounded-md border font-medium transition-all ${
-        rarityColors[badge.rarity || 'common']
-      } ${isSmall ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'}`}
+      className={`inline-flex items-center gap-1.5 rounded-md border font-medium bg-[#F7F8F5] border-[#E5EAE7] text-[#1F2933] ${
+        isSmall ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'
+      }`}
       title={badge.description}
     >
-      <BadgeIcon name={badge.icon || badge.name} className={isSmall ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
+      <BadgeIcon name={badge.icon || badge.name} className={`${isSmall ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-[#3F6B5B]`} />
       <span>{badge.name}</span>
     </div>
   );
@@ -56,11 +50,11 @@ export const VerifiedSkillPill: React.FC<{
   level?: string;
 }> = ({ method = 'Skill Assessment Passed', skillName, level }) => {
   return (
-    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-700/80 text-xs text-slate-200">
-      <span className="font-semibold text-slate-100">{skillName}</span>
-      {level && <span className="text-slate-400">({level})</span>}
-      <span className="inline-flex items-center gap-1 text-[11px] text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
-        <CheckCircle2 className="w-3 h-3 text-cyan-400" />
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#F7F8F5] border border-[#E5EAE7] text-xs text-[#1F2933]">
+      <span className="font-semibold">{skillName}</span>
+      {level && <span className="text-[#6B7280]">({level})</span>}
+      <span className="inline-flex items-center gap-1 text-[11px] text-[#387B62] bg-[#DCE9E2] px-1.5 py-0.2 rounded font-medium">
+        <CheckCircle2 className="w-3 h-3 text-[#387B62]" />
         {method}
       </span>
     </div>

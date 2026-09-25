@@ -252,10 +252,10 @@ const AppContent: React.FC = () => {
   // Minimal loading view during initial session check
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0B1020] flex items-center justify-center">
+      <div className="min-h-screen bg-[#F7F8F5] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-          <span className="text-xs text-slate-400 font-mono tracking-wide">
+          <div className="w-8 h-8 border-2 border-[#3F6B5B]/30 border-t-[#3F6B5B] rounded-full animate-spin" />
+          <span className="text-xs text-[#6B7280] font-medium tracking-wide">
             Loading PeerLoop...
           </span>
         </div>
@@ -326,15 +326,15 @@ const AppContent: React.FC = () => {
   const currentTab = PATH_TO_TAB[currentPath] || 'dashboard';
 
   return (
-    <div className="min-h-screen bg-[#0B1020] text-[#F8FAFC] flex flex-col md:flex-row pb-16 md:pb-0 overflow-x-hidden font-sans">
+    <div className="min-h-screen bg-[#F7F8F5] text-[#1F2933] flex flex-col md:flex-row pb-16 md:pb-0 overflow-x-hidden font-sans">
       {/* Optional Top Toast if message still active */}
       {logoutMessage && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed top-5 right-5 sm:right-8 z-50 flex items-center gap-3 px-4 py-3 bg-[#111827] text-white border border-emerald-500/40 rounded-xl shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300"
+          className="fixed top-5 right-5 sm:right-8 z-50 flex items-center gap-3 px-4 py-3 bg-[#1F2933] text-white border border-[#3F6B5B]/40 rounded-xl shadow-xl animate-in fade-in slide-in-from-top-4 duration-300"
         >
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <CheckCircle2 className="w-5 h-5 text-[#387B62] shrink-0" />
           <span className="text-sm font-medium text-slate-100">{logoutMessage}</span>
           <button
             onClick={clearLogoutMessage}
@@ -356,7 +356,7 @@ const AppContent: React.FC = () => {
       />
 
       {/* 2. MAIN APPLICATION CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-[#F7F8F5]">
         {/* Top App Bar */}
         <AppTopBar
           currentTab={currentTab}
@@ -368,7 +368,7 @@ const AppContent: React.FC = () => {
         />
 
         {/* View Switcher Container */}
-        <main className="flex-1 bg-[#0B1020] overflow-y-auto">
+        <main className="flex-1 bg-[#F7F8F5] overflow-y-auto">
           {currentTab === 'dashboard' && (
             <HomeDashboard
               onNavigate={handleNavigateTab}

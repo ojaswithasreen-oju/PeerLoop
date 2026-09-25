@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, FileText, Code, Video, ExternalLink, Trash2 } from 'lucide-react';
+import { Bookmark, FileText, Code, Video, ExternalLink } from 'lucide-react';
 
 export const SavedResourcesView: React.FC = () => {
   const savedItems = [
@@ -33,12 +33,12 @@ export const SavedResourcesView: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 animate-in fade-in duration-200">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 animate-in fade-in duration-150">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F8FAFC] tracking-tight">
-          Saved Library
+        <h1 className="text-2xl sm:text-3xl font-bold text-[#1F2933] tracking-tight">
+          Saved
         </h1>
-        <p className="text-xs sm:text-sm text-[#94A3B8] mt-1">
+        <p className="text-xs sm:text-sm text-[#6B7280] mt-1">
           Your bookmarked session summaries, cheatsheets, and peer notes.
         </p>
       </div>
@@ -49,28 +49,28 @@ export const SavedResourcesView: React.FC = () => {
           return (
             <div
               key={item.id}
-              className="p-4 sm:p-5 rounded-2xl bg-[#151E33] border border-[#1E2A47] hover:border-[#8B5CF6]/50 transition-all flex items-center justify-between gap-4"
+              className="p-4 sm:p-5 rounded-2xl bg-white border border-[#E5EAE7] hover:border-[#DCE9E2] transition-all flex items-center justify-between gap-4 shadow-xs"
             >
               <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-[#11182B] text-[#22D3EE] border border-[#1E2A47] flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-[#F7F8F5] text-[#3F6B5B] border border-[#E5EAE7] flex items-center justify-center shrink-0">
                   <Icon className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xs sm:text-sm font-bold text-[#F8FAFC]">
+                    <h3 className="text-xs sm:text-sm font-bold text-[#1F2933]">
                       {item.title}
                     </h3>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#11182B] text-[#C4B5FD] border border-[#1E2A47]">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#DCE9E2] text-[#3F6B5B]">
                       {item.tag}
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                  <p className="text-[11px] text-[#6B7280] mt-0.5">
                     {item.type} • Shared by {item.mentor} • {item.date}
                   </p>
                 </div>
               </div>
 
-              <button className="p-2 rounded-xl text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#11182B] transition-colors cursor-pointer">
+              <button className="p-2 rounded-lg text-[#6B7280] hover:text-[#1F2933] hover:bg-[#F7F8F5] transition-colors cursor-pointer">
                 <ExternalLink className="w-4 h-4" />
               </button>
             </div>
